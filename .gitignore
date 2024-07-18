@@ -140,7 +140,8 @@ jax_resnet/pretrained.py
 .viminfo
 
 Anaconda3-2024.02-1-Linux-x86_64.sh
-ModelDiff/
+
 anaconda3
 data
 TensorRT-10.2.0.19
+ModelDiff

@@ -1,0 +1,2 @@
+/home/quantctr/anaconda3
+/home/quantctr/anaconda3/envs/jupyter

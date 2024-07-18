@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="$PROJECT_DIR$/ModelDiff" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/aqt" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/arachne" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/jax-resnet" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/vision_transformer" vcs="Git" />
+  </component>
+</project>

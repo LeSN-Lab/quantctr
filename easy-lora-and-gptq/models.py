@@ -108,6 +108,7 @@ class VisionTransformer(nn.Module):
     transformer: dict
     hidden_size: int
     num_classes: int
+    patches: dict
     representation_size: Optional[int] = None
     classifier: str = 'token'
     head_bias_init: float = 0.
@@ -116,7 +117,7 @@ class VisionTransformer(nn.Module):
     def __call__(self, inputs, *, train):
         x = inputs
         n, h, w, c = x.shape
-        x = nn.Conv(features=self.hidden_size, kernel_size=self.patch_size['size'], strides=self.patch_size['size'],
+        x = nn.Conv(features=self.hidden_size, kernel_size=self.patches['size'], strides=self.patches['size'],
                     padding='VALID', name='embedding')(x)
         
         n, h, w, c = x.shape
@@ -148,7 +149,18 @@ class VisionTransformer(nn.Module):
         else:
             x = IdentityLayer(name='pre_logits')(x)
         
+        # if self.num_classes:
+        #     x = nn.Dense(features=self.num_classes, name='head', kernel_init=nn.initializers.zeros,
+        #                  bias_init=nn.initializers.constant(self.head_bias_init))(x)
+        #modified
+        # if self.num_classes:
+        #     num_classes = self.num_classes
+        #     if 'head' in self.variables:
+        #         num_classes = self.variables['params']['head']['kernel'].shape[1]
+        #     x = nn.Dense(features=num_classes, name='head', kernel_init=nn.initializers.zeros,
+        #                  bias_init=nn.initializers.constant(self.head_bias_init))(x)
+        # return x
         if self.num_classes:
             x = nn.Dense(features=self.num_classes, name='head', kernel_init=nn.initializers.zeros,
-                         bias_init=nn.initializers.constant(self.head_bias_init))(x)
+                        bias_init=nn.initializers.constant(self.head_bias_init))(x)
         return x

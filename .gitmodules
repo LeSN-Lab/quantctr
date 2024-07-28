@@ -1,0 +1,3 @@
+[submodule "jax-gptq"]
+	path = jax-gptq
+	url = https://github.com/davisyoshida/jax-gptq

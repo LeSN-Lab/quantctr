@@ -60,29 +60,20 @@ def get_params_size(params):
         total_size += param.size * param.dtype.itemsize
     return total_size
 
-def create_jax_datasets(val_loader):
-    def numpy_collate(batch):
-        if isinstance(batch[0], np.ndarray):
-            return np.stack(batch)
-        elif isinstance(batch[0], (tuple,list)):
-            transposed = zip(*batch)
-            return [numpy_collate(samples) for samples in transposed]
-        else:
-            return np.array(batch)
-
-    def to_jax_batch(batch):
-        images, labels = batch
-        # Transpose images to (batch_size, height, width, channels)
-        images = jnp.array(images.numpy()).transpose(0, 2, 3, 1)
-
-        return {
-            'image': jnp.array(images),
-            'label': jnp.array(labels.numpy())
-        }
-
-    jax_val_dataset = map(to_jax_batch, val_loader)
+def create_jax_val_dataset(val_loader):
+    jax_dataset = []
     
-    return jax_val_dataset
+    for batch in val_loader:
+        # numpy_collate 함수를 사용했으므로 batch는 이미 NumPy 배열일 것입니다
+        images, labels = batch
+        
+        # NumPy 배열을 JAX 배열로 변환
+        jax_images = jnp.array(images)
+        jax_labels = jnp.array(labels)
+        
+        jax_dataset.append((jax_images, jax_labels))
+    
+    return jax_dataset
             
 class EvalModule:
     def __init__(self, **model_hparams):
@@ -109,6 +100,7 @@ class EvalModule:
             correct_class += acc * batch[0].shape[0]
             count += batch[0].shape[0]
         eval_acc = (correct_class / count).item()
+        print("eval_acc:", eval_acc)
         return eval_acc
     
     def apply_model(self, params, x):
@@ -133,15 +125,10 @@ def evaluate_model(**kwargs):
     original_size = get_model_size(params)
     val_acc = evaluator.eval_model(params, val_loader)
     
-    jax_val_dataset = create_jax_datasets(val_loader)
-    
+    jax_val_dataset = create_jax_val_dataset(val_loader)
     # 양자화를 위한 데이터 준비 (실제 데이터 사용)
     quantization_data = []
-    
-    for batch in jax_val_dataset:
-        images = batch['image']
-        labels = batch['label']
-         
+    for images, labels in jax_val_dataset:
         quantization_data.append(images)
         if len(quantization_data) >= 32:
             break
@@ -162,13 +149,12 @@ def evaluate_model(**kwargs):
     total_correct = 0
     total_samples = 0
 
-    for batch in jax_val_dataset:
-        images = batch['image']
-        labels = batch['label']
+    for images, labels in jax_val_dataset:
+        
         images = jax.device_put(images, gpu)
         
-        # outputs = jitted_model(quantized_params, images)
-        # predicted_classes = jnp.argmax(outputs, axis=1)
+        outputs = jitted_model(quantized_params, images)
+        
         predicted_classes = jnp.argmax(quantized_fn, axis=1)
         
         correct_predictions = jnp.sum(predicted_classes == labels)

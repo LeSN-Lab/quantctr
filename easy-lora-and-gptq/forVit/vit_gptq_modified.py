@@ -214,3 +214,5 @@ if __name__ == "__main__":
     accuracy_drop = original_accuracy - quantized_accuracy
     print(f"Accuracy drop: {accuracy_drop:.4f}")
     print(f"Relative accuracy drop: {(accuracy_drop / original_accuracy) * 100:.2f}%")
+    
+    

@@ -64,7 +64,7 @@ def create_jax_val_dataset(val_loader):
     jax_dataset = []
     
     for batch in val_loader:
-        # numpy_collate 함수를 사용했으므로 batch는 이미 NumPy 배열일 것입니다
+        # numpy_collate 함수를 사용했으므로 batch는 이미 NumPy 배열일 것
         images, labels = batch
         
         # NumPy 배열을 JAX 배열로 변환
@@ -94,13 +94,30 @@ class EvalModule:
         return params
 
     def eval_model(self, params, data_loader):
-        correct_class, count = 0, 0
+        batch_count = 0
+        total_correct = 0
+        total_samples = 0
+        
         for batch in data_loader:
-            acc = self.eval_step(params, batch)
-            correct_class += acc * batch[0].shape[0]
-            count += batch[0].shape[0]
-        eval_acc = (correct_class / count).item()
-        print("eval_acc:", eval_acc)
+            images, labels = batch
+            images = jax.device_put(images, gpu)
+            labels = jax.device_put(labels, gpu)
+            
+            logits = self.model.apply({'params': params}, images, train=False)
+            predicted_classes = jnp.argmax(logits, axis=-1)
+            
+            correct_predictions = jnp.sum(predicted_classes == labels)
+            total_correct += correct_predictions
+            total_samples += labels.shape[0]
+            
+            batch_count += 1
+            current_accuracy = total_correct / total_samples
+            print(f"Original model - Batch {batch_count} processed, Current Accuracy: {current_accuracy:.4f}, Total samples: {total_samples}")
+
+            if batch_count >= 10:
+                break
+        
+        eval_acc = total_correct / total_samples
         return eval_acc
     
     def apply_model(self, params, x):
@@ -123,10 +140,13 @@ def evaluate_model(**kwargs):
     evaluator = EvalModule(**kwargs)
     params = evaluator.load_model()
     original_size = get_model_size(params)
+    
+    print("Evaluating original model:")
     val_acc = evaluator.eval_model(params, val_loader)
     
+    print("\nEvaluating quantized model:")
     jax_val_dataset = create_jax_val_dataset(val_loader)
-    # 양자화를 위한 데이터 준비 (실제 데이터 사용)
+    # 양자화를 위한 데이터 준비
     quantization_data = []
     for images, labels in jax_val_dataset:
         quantization_data.append(images)
@@ -134,7 +154,7 @@ def evaluate_model(**kwargs):
             break
     
     # 모델 양자화
-    _, _, quantized_params = jax_gptq.quantize(
+    quantized_params = jax_gptq.quantize(
         evaluator.apply_model, 
         params, 
         quantization_data, 
@@ -150,21 +170,19 @@ def evaluate_model(**kwargs):
     total_samples = 0
 
     for images, labels in jax_val_dataset:
-        
         images = jax.device_put(images, gpu)
+        labels = jax.device_put(labels, gpu)
         
         outputs = jitted_model(quantized_params, images)
-        
-        predicted_classes = jnp.argmax(quantized_fn, axis=1)
+        predicted_classes = jnp.argmax(outputs, axis=1)
         
         correct_predictions = jnp.sum(predicted_classes == labels)
         total_correct += correct_predictions
         total_samples += labels.shape[0]
         
-        batch_accuracy = correct_predictions / labels.shape[0]
-        
         batch_count += 1
-        print(f"Batch {batch_count} processed, Batch Accuracy: {batch_accuracy:.4f}, Total samples: {total_samples}")
+        current_accuracy = total_correct / total_samples
+        print(f"Quantized model - Batch {batch_count} processed, Current Accuracy: {current_accuracy:.4f}, Total samples: {total_samples}")
 
         if batch_count >= 10:
             break
@@ -172,11 +190,15 @@ def evaluate_model(**kwargs):
     quantized_val_acc = total_correct / total_samples
     quantized_size = get_model_size(quantized_params)
     
+    accuracy_drop = val_acc - quantized_val_acc
+    accuracy_drop_percentage = (accuracy_drop / val_acc) * 100
+    
     return {
         'original_val_acc': val_acc,
         'quantized_val_acc': quantized_val_acc,
         'original_size_mb': original_size,
-        'quantized_size_mb': quantized_size
+        'quantized_size_mb': quantized_size,
+        'accuracy_drop_percentage': accuracy_drop_percentage
     }
             
 results = evaluate_model(embed_dim=256,
@@ -193,4 +215,5 @@ print("Original ViT validation accuracy:", results['original_val_acc'])
 print("Quantized ViT validation accuracy:", results['quantized_val_acc'])
 print(f"Original model size: {results['original_size_mb']:.2f} MB")
 print(f"Quantized model size: {results['quantized_size_mb']:.2f} MB")
+print(f"Accuracy drop: {results['accuracy_drop_percentage']:.2f}%")
 print(f"Size reduction: {(1 - results['quantized_size_mb'] / results['original_size_mb']) * 100:.2f}%")
